@@ -5,7 +5,11 @@ import robot from 'robotjs';
 export default class RobotDrawer implements IDrawer {
   private static step: number = 1;
   
-  public drawRectangle(width: number, height: number, start: Point = new Point(robot.getMousePos())): void {
+  public drawRectangle(
+    width: number,
+    height: number,
+    start: Point = new Point(robot.getMousePos())
+  ): void {
     const points: Point[] = [
       start,
       new Point(start.x + width, start.y),
@@ -25,7 +29,10 @@ export default class RobotDrawer implements IDrawer {
     robot.mouseToggle('up');
   }
 
-  public drawCircle(radius: number, start: Point = new Point(robot.getMousePos())): void {
+  public drawCircle(
+    radius: number,
+    start: Point = new Point(robot.getMousePos())
+  ): void {
     this.withMouseDown(() => {
       const twoPI = 2 * Math.PI;
       const oneDegreeInRadians = twoPI / 360; 

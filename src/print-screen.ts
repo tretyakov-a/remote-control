@@ -4,7 +4,7 @@ import robot from 'robotjs';
 import Point from './point.js';
 import { COMMAND } from './constants.js';
 
-export default async function sendPrintScreen(writeStream: Duplex) {
+async function getPrintScreen(): Promise<string> {
   const { x, y } = new Point(robot.getMousePos());
   const size = 200;
   const halfSize = size / 2;
@@ -19,8 +19,12 @@ export default async function sendPrintScreen(writeStream: Duplex) {
     }
   }
 
+  return jimg.getBase64Async(Jimp.MIME_PNG);
+}
+
+export default async function sendPrintScreen(writeStream: Duplex) {
   try {
-    const pngBase64String: string = await jimg.getBase64Async(Jimp.MIME_PNG);
+    const pngBase64String: string = await getPrintScreen();
     const readStream = Readable.from(`${COMMAND.PRINT_SCREEN} ${pngBase64String.split(',')[1]}`);
 
     await new Promise((resolve, reject) => {
