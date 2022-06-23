@@ -1,10 +1,10 @@
+import { Duplex, Readable } from 'stream';
 import Jimp from 'jimp';
 import robot from 'robotjs';
 import Point from './point.js';
-import { WebSocket } from 'ws';
 import { COMMAND } from './constants.js';
 
-export default async function sendPrintScreen(ws: WebSocket) {
+export default async function sendPrintScreen(writeStream: Duplex) {
   const { x, y } = new Point(robot.getMousePos());
   const size = 200;
   const halfSize = size / 2;
@@ -18,10 +18,17 @@ export default async function sendPrintScreen(ws: WebSocket) {
       jimg.setPixelColor(num, x, y);
     }
   }
-  
+
   try {
     const pngBase64String: string = await jimg.getBase64Async(Jimp.MIME_PNG);
-    ws.send(`${COMMAND.PRINT_SCREEN} ${pngBase64String.split(',')[1]}`);
+    const readStream = Readable.from(`${COMMAND.PRINT_SCREEN} ${pngBase64String.split(',')[1]}`);
+
+    await new Promise((resolve, reject) => {
+      readStream.on('end', resolve);
+      readStream.on('error', reject);
+      readStream.pipe(writeStream, { end: false })
+        .on('error', reject);
+    });
   } catch (err) {
     console.error(err as Error);
   }
