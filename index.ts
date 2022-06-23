@@ -2,6 +2,9 @@ import Jimp from 'jimp';
 import { httpServer } from './src/http_server/index.js';
 import robot from 'robotjs';
 import { WebSocketServer, WebSocket } from 'ws';
+import RobotDrawer from './src/robot-drawer.js';
+import { IDrawer } from './src/drawer.interface.js';
+import Point from './src/point.js';
 
 const HTTP_PORT = 3000;
 
@@ -16,14 +19,15 @@ console.log(`Start static http server on the ${HTTP_PORT} port!`);
 httpServer.listen(HTTP_PORT);
 
 const wss = new WebSocketServer({ port: 8080 });
+const robotDrawer: IDrawer = new RobotDrawer();
 
 function sendPosition(ws: WebSocket): void {
-  const { x, y } = robot.getMousePos();
+  const { x, y } = new Point(robot.getMousePos());
   ws.send(`mouse_position ${x},${y}`);
 }
 
 function moveMouse(distance: number = 0, direction: DIRECTION): void {
-  const { x, y } = robot.getMousePos();
+  const { x, y } = new Point(robot.getMousePos());
   const D = DIRECTION;
   switch(direction) {
     case D.UP: robot.moveMouse(x, y - distance); break;
@@ -33,51 +37,8 @@ function moveMouse(distance: number = 0, direction: DIRECTION): void {
   }
 }
 
-function drawCircle(radius: number = 0) {
-  const { x, y } = robot.getMousePos();
-
-  const twoPI = 2 * Math.PI;
-  const oneDeg = twoPI / 360; 
-
-  robot.mouseToggle('down');
-  for (let angle = 0; angle <= twoPI; angle += oneDeg) {
-    const dx = radius * Math.sin(angle);
-    const dy = radius * Math.cos(angle);
-    robot.moveMouse(x + dx, y + radius - dy);
-  }
-  robot.mouseToggle('up');
-}
-
-function drawRectangle(width: number = 0, height: number = 0) {
-  let { x, y } = robot.getMousePos();
-
-  const STEP = 1;
-  robot.mouseToggle('down');
-
-  for (let i = x; i <= x + width; i += STEP) {
-    robot.moveMouse(i, y);
-  }
-  x += width;
-
-  for (let j = y; j <= y + height; j += STEP) {
-    robot.moveMouse(x, j);
-  }
-  y += height;
-
-  for (let i = x; i >= x - width; i -= STEP) {
-    robot.moveMouse(i, y);
-  }
-  x -= width;
-
-  for (let j = y; j >= y - height; j -= STEP) {
-    robot.moveMouse(x, j);
-  }
-  
-  robot.mouseToggle('up');
-}
-
 function sendPrintScreen(ws: WebSocket) {
-  const { x, y } = robot.getMousePos();
+  const { x, y } = new Point(robot.getMousePos());
   const size = 200;
   const halfSize = size / 2;
   const img = robot.screen.capture(x - halfSize, y - halfSize, size, size);
@@ -93,7 +54,6 @@ function sendPrintScreen(ws: WebSocket) {
 
   jimg.getBase64Async(Jimp.MIME_PNG)
     .then((buffer) => {
-
       ws.send(`prnt_scrn ${buffer.toString().split(',')[1]}`);
     })
 }
@@ -120,16 +80,16 @@ wss.on('connection', (ws) => {
 
     const D = DIRECTION;
     const { name, param1, param2 } = parseCommand(data.toString());
-    
+
     switch(name) {
       case 'mouse_position': sendPosition(ws); break;
       case 'mouse_up': moveMouse(param1, D.UP); break;
       case 'mouse_down': moveMouse(param1, D.DOWN); break;
       case 'mouse_left': moveMouse(param1, D.LEFT); break;
       case 'mouse_right': moveMouse(param1, D.RIGHT); break;
-      case 'draw_circle': drawCircle(param1); break;
-      case 'draw_rectangle': drawRectangle(param1, param2); break;
-      case 'draw_square': drawRectangle(param1, param1); break;
+      case 'draw_circle': robotDrawer.drawCircle(param1); break;
+      case 'draw_rectangle': robotDrawer.drawRectangle(param1, param2); break;
+      case 'draw_square': robotDrawer.drawRectangle(param1, param1); break;
       case 'prnt_scrn': sendPrintScreen(ws); break;
     }
 
