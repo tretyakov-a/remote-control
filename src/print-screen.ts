@@ -31,8 +31,8 @@ async function getPrintScreen(): Promise<string> {
 export default async function sendPrintScreen(writeStream: Duplex): Promise<void> {
   try {
     const pngBase64String: string = await getPrintScreen();
-    const command = `${COMMAND.PRINT_SCREEN} ${pngBase64String.split(',')[1]}`;
-    await sendCommandWithLog(command, writeStream);
+    const data = pngBase64String.split(',')[1];
+    await sendCommandWithLog(writeStream, COMMAND.PRINT_SCREEN, data);
   } catch (err) {
     console.error(err as Error);
   }

@@ -17,19 +17,22 @@ export const parseCommand = (str: string): Command => {
   }
 }
 
+const MAX_LOG_DATA_LENGTH = 128;
+
 const logCommand = (prefix: string) => (command: string): void => console.log(`${prefix} ${command}`);
 
 export const logInputCommand = logCommand('->');
 
 export const logOutputCommand = logCommand('<-');
 
-const withLog = (fn: Function) => (data: string, ...rest: any[]) => {
-  logOutputCommand(data);
-  return fn.call(null, data, ...rest);
+const withLog = (fn: Function) => (...args: [Duplex, string, string]) => {
+  const [ _, command, data ] = args;
+  logOutputCommand(`${command} ${data.length > MAX_LOG_DATA_LENGTH ? '[...very long string here...]' : data}`);
+  return fn.apply(null, args);
 }
 
-export const sendCommand = async (data: string, writeStream: Duplex): Promise<any>  => {
-  const readStream = Readable.from(data + NUL);
+export const sendCommand = async (writeStream: Duplex, command: string, data: string): Promise<any>  => {
+  const readStream = Readable.from(`${command} ${data}${NUL}`);
   try {
     await new Promise((resolve, reject) => {
       readStream.on('end', resolve);
@@ -42,7 +45,6 @@ export const sendCommand = async (data: string, writeStream: Duplex): Promise<an
   } finally {
     if (readStream) readStream.destroy();
   }
-
 }
 
 export const sendCommandWithLog = withLog(sendCommand);

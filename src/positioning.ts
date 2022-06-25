@@ -6,8 +6,8 @@ import { sendCommandWithLog } from './command.js';
 
 export async function sendPosition(writeStream: Duplex): Promise<void> {
   const { x, y } = new Point(robot.getMousePos());
-  const command = `${COMMAND.MOUSE_POSITION} ${x},${y}`;
-  await sendCommandWithLog(command, writeStream);
+  const data = `${x},${y}`;
+  await sendCommandWithLog(writeStream, COMMAND.MOUSE_POSITION, data);
 }
 
 export function moveMouse(distance: number = 0, direction: DIRECTION): void {
