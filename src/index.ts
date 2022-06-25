@@ -1,11 +1,11 @@
-import { httpServer } from './src/http_server/index.js';
-import { createWebSocketStream, WebSocketServer } from 'ws';
-import RobotDrawer from './src/robot-drawer.js';
-import { IDrawer } from './src/drawer.interface.js';
-import sendPrintScreen from './src/print-screen.js';
-import { sendPosition, moveMouse } from './src/positioning.js';
-import parseCommand from './src/command.js';
-import { DIRECTION, COMMAND } from './src/constants.js';
+import { httpServer } from './http_server/index.js';
+import { createWebSocketStream, WebSocketServer, WebSocket } from 'ws';
+import RobotDrawer from './drawer/robot-drawer.js';
+import { IDrawer } from './drawer/drawer.interface.js';
+import sendPrintScreen from './print-screen.js';
+import { sendPosition, moveMouse } from './positioning.js';
+import { parseCommand, logInputCommand } from './command.js';
+import { DIRECTION, COMMAND } from './common/constants.js';
 
 const HTTP_PORT = 3000;
 const WSS_PORT = 8080;
@@ -17,15 +17,25 @@ const wss = new WebSocketServer({ port: WSS_PORT });
 console.log(`Start web socket server on the localhost:${WSS_PORT}!`);
 
 const robotDrawer: IDrawer = new RobotDrawer();
+const wsClients: WebSocket[] = [];
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws: WebSocket) => {
+  wsClients.push(ws);
+
   const duplexStream = createWebSocketStream(ws, { encoding: 'utf8', decodeStrings: false });
+  duplexStream.setMaxListeners(0);
+
+  duplexStream.on('error', (err) => {
+    console.error(err);
+    ws.close();
+  });
+
   duplexStream.on('data', (data) => {
-    console.log('received: %s', data);
+    logInputCommand(data);
     
     const D = DIRECTION;
     const C = COMMAND;
-    const { name, param1, param2 } = parseCommand(data.toString());
+    const { name, param1, param2 } = parseCommand(data);
     
     switch(name) {
       case C.MOUSE_POSITION: sendPosition(duplexStream); break;
@@ -39,5 +49,13 @@ wss.on('connection', (ws) => {
       case C.PRINT_SCREEN: sendPrintScreen(duplexStream); break;
     }
   });
-  duplexStream.write('ready');
+});
+
+wss.on('error', (err) => {
+  console.error(err);
+  wsClients.forEach((ws) => ws.close());
+});
+
+wss.on('close', () => {
+  wsClients.forEach((ws) => ws.close());
 });

@@ -1,8 +1,8 @@
 import { Duplex } from 'stream';
 import Jimp from 'jimp';
 import robot from 'robotjs';
-import Point from './point.js';
-import { COMMAND } from './constants.js';
+import Point from './drawer/point.js';
+import { COMMAND } from './common/constants.js';
 import { sendCommandWithLog } from './command.js';
 
 const SIZE = 200;

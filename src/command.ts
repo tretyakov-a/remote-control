@@ -1,5 +1,5 @@
 import { Duplex, Readable } from "stream";
-import { NUL } from './constants.js';
+import { NUL } from './common/constants.js';
 
 type Command = {
   name: string,
@@ -30,12 +30,19 @@ const withLog = (fn: Function) => (data: string, ...rest: any[]) => {
 
 export const sendCommand = async (data: string, writeStream: Duplex): Promise<any>  => {
   const readStream = Readable.from(data + NUL);
-  return new Promise((resolve, reject) => {
-    readStream.on('end', resolve);
-    readStream.on('error', reject);
-    readStream.pipe(writeStream, { end: false })
-      .on('error', reject);
-  });
+  try {
+    await new Promise((resolve, reject) => {
+      readStream.on('end', resolve);
+      readStream.on('error', reject);
+      readStream.pipe(writeStream, { end: false })
+        .on('error', reject);
+    });
+  } catch (error) {
+    throw error;
+  } finally {
+    if (readStream) readStream.destroy();
+  }
+
 }
 
 export const sendCommandWithLog = withLog(sendCommand);

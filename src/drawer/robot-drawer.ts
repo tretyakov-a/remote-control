@@ -1,5 +1,5 @@
 import robot from 'robotjs';
-import { IDrawer } from "./drawer.interface.js";
+import { IDrawer } from "./drawer.interface";
 import Point from "./point.js";
 
 export default class RobotDrawer implements IDrawer {
