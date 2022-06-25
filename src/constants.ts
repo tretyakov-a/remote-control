@@ -16,3 +16,5 @@ export enum COMMAND {
   DRAW_RECT = 'draw_rectangle',
   DRAW_SQUARE = 'draw_square',
 };
+
+export const NUL = '\0';

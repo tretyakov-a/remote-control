@@ -1,38 +1,38 @@
-import { Duplex, Readable } from 'stream';
+import { Duplex } from 'stream';
 import Jimp from 'jimp';
 import robot from 'robotjs';
 import Point from './point.js';
 import { COMMAND } from './constants.js';
+import { sendCommandWithLog } from './command.js';
 
-async function getPrintScreen(): Promise<string> {
-  const { x, y } = new Point(robot.getMousePos());
-  const size = 200;
-  const halfSize = size / 2;
-  const img = robot.screen.capture(x - halfSize, y - halfSize, size, size);
+const SIZE = 200;
 
-  let jimg = new Jimp(size, size);
-  for (let x = 0; x < size; x += 1) {
-    for (let y = 0; y < size; y += 1) {
+function transformToJimg(img: robot.Bitmap): Jimp {
+  let jimg = new Jimp(SIZE, SIZE);
+  for (let x = 0; x < SIZE; x += 1) {
+    for (let y = 0; y < SIZE; y += 1) {
       const hex = img.colorAt(x, y);
       const num = parseInt(hex + "ff", 16)
       jimg.setPixelColor(num, x, y);
     }
   }
-
-  return jimg.getBase64Async(Jimp.MIME_PNG);
+  return jimg;
 }
 
-export default async function sendPrintScreen(writeStream: Duplex) {
+async function getPrintScreen(): Promise<string> {
+  const { x, y } = new Point(robot.getMousePos());
+  const halfSize = SIZE / 2;
+  const screenCapture = robot.screen.capture(x - halfSize, y - halfSize, SIZE, SIZE);
+
+  return transformToJimg(screenCapture)
+    .getBase64Async(Jimp.MIME_PNG);
+}
+
+export default async function sendPrintScreen(writeStream: Duplex): Promise<void> {
   try {
     const pngBase64String: string = await getPrintScreen();
-    const readStream = Readable.from(`${COMMAND.PRINT_SCREEN} ${pngBase64String.split(',')[1]}`);
-
-    await new Promise((resolve, reject) => {
-      readStream.on('end', resolve);
-      readStream.on('error', reject);
-      readStream.pipe(writeStream, { end: false })
-        .on('error', reject);
-    });
+    const command = `${COMMAND.PRINT_SCREEN} ${pngBase64String.split(',')[1]}`;
+    await sendCommandWithLog(command, writeStream);
   } catch (err) {
     console.error(err as Error);
   }

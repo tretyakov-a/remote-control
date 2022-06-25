@@ -1,9 +1,9 @@
-import { IDrawer } from "drawer.interface.js";
-import Point from "./point.js";
 import robot from 'robotjs';
+import { IDrawer } from "./drawer.interface.js";
+import Point from "./point.js";
 
 export default class RobotDrawer implements IDrawer {
-  private static step: number = 1;
+  private static step: number = 2;
   
   public drawRectangle(
     width: number,
@@ -35,7 +35,7 @@ export default class RobotDrawer implements IDrawer {
   ): void {
     this.withMouseDown(() => {
       const twoPI = 2 * Math.PI;
-      const oneDegreeInRadians = twoPI / 360; 
+      const oneDegreeInRadians = twoPI / 360;
       const centerY = start.y + radius;
 
       for (let angle = 0; angle <= twoPI; angle += oneDegreeInRadians) {
@@ -43,6 +43,7 @@ export default class RobotDrawer implements IDrawer {
         const dy = radius * Math.cos(angle);
         robot.moveMouse(start.x + dx, centerY - dy);
       }
+      robot.moveMouse(start.x, start.y);
     })
   }
 
