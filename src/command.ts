@@ -1,46 +1,78 @@
 import { Duplex, Readable } from "stream";
 import { COMMAND } from "./constants.js";
 
-export type RegCommandRequest = {
+export interface RegCommandRequest {
   name: string;
   password: string;
-};
+}
 
-export type RegCommandResponse = {
+export interface RegCommandResponse {
   name: string;
   index: number;
   error: boolean;
   errorText: string;
-};
+}
 
-export type AddUserToRoomCommandRequest = {
+export interface AddUserToRoomCommandRequest {
   indexRoom: number;
-};
+}
 
-export type CreateGameResponse = {
+export interface CreateGameResponse {
   idGame: number;
   idPlayer: number;
-};
+}
 
 export type ShipType = "small" | "medium" | "large" | "huge";
 
 export type Ship = {
-  position: { x: number; y: number };
+  position: Position;
   direction: boolean;
   length: number;
   type: ShipType;
 };
 
-export type AddShipsRequest = {
+export interface AddShipsRequest {
   gameId: number;
   ships: Ship[];
   indexPlayer: number;
-};
+}
 
-export type StartGameResponse = {
+export interface StartGameResponse {
   ships: Ship[];
   currentPlayerIndex: number;
+}
+
+export interface AttackRequest {
+  gameId: number;
+  x: number;
+  y: number;
+  indexPlayer: number;
+}
+
+export type AttackStatus = "miss" | "killed" | "shot";
+
+export type Position = {
+  x: number;
+  y: number;
 };
+export interface AttackResponse {
+  position: Position;
+  currentPlayer: number;
+  status: AttackStatus;
+}
+
+export interface RandomAttackRequest {
+  gameId: number;
+  indexPlayer: number;
+}
+
+export interface TurnResponse {
+  currentPlayer: number;
+}
+
+export interface FinishResponse {
+  winPlayer: number;
+}
 
 interface CommandWithStringData {
   type: COMMAND;

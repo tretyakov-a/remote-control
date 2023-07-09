@@ -9,9 +9,13 @@ import {
   AddUserToRoomCommandRequest,
   Ship,
   AddShipsRequest,
+  TurnResponse,
+  AttackRequest,
+  RandomAttackRequest,
 } from "./command.js";
 import { COMMAND } from "./constants.js";
 import { Duplex } from "stream";
+import { GameField } from "./game/game-field.js";
 
 const HTTP_PORT = 8181;
 const WSS_PORT = 3000;
@@ -47,10 +51,12 @@ interface Room {
 interface PlayerGameState {
   index: number;
   ships: Ship[];
+  enemyGameField: GameField;
 }
 
 interface Game {
   players: PlayerGameState[];
+  playerIndexTurn: number;
 }
 
 const wsClients: Map<number, WebSocket> = new Map();
@@ -69,6 +75,7 @@ let rooms: Room[] = [];
 const games: Game[] = [];
 
 type Message = [COMMAND, unknown];
+type Messages = (((player: PlayerGameState) => Message) | Message)[];
 
 const onePlayerRoomsMessage = (): Message => {
   return [
@@ -84,6 +91,58 @@ const sendToAll = async (messages: Message[]) => {
       await sendCommandWithLog(stream)(cmd, data);
     }
   }
+};
+
+const sendToGamePlayers = async (gameId: number, messages: Messages) => {
+  for (const player of games[gameId].players) {
+    for (const msg of messages) {
+      const [cmd, data] = typeof msg === "function" ? msg(player) : msg;
+      await sendCommandWithLog(players[player.index].stream)(cmd, data);
+    }
+  }
+};
+
+const attackCommand = async (data: AttackRequest) => {
+  const { gameId, x, y, indexPlayer } = data;
+  const playerStateIdx = games[gameId].players.findIndex(
+    ({ index }) => index === indexPlayer
+  );
+
+  const { status, missesAround } = games[gameId].players[
+    playerStateIdx
+  ].enemyGameField.check({ x, y });
+
+  if (indexPlayer !== games[gameId].playerIndexTurn || status === "opened")
+    return;
+
+  if (status === "miss") {
+    games[gameId].playerIndexTurn = games[gameId].players
+      .map(({ index }) => index)
+      .filter((index) => index !== indexPlayer)[0];
+  }
+  const messages: Messages = [
+    [
+      COMMAND.ATTACK,
+      { currentPlayer: indexPlayer, position: { x, y }, status },
+    ],
+    [COMMAND.TURN, { currentPlayer: games[gameId].playerIndexTurn }],
+  ];
+  if (status === "killed" && missesAround !== undefined) {
+    for (const missedPos of missesAround) {
+      messages.push(
+        [
+          COMMAND.ATTACK,
+          {
+            currentPlayer: indexPlayer,
+            position: missedPos,
+            status: "miss",
+          },
+        ],
+        [COMMAND.TURN, { currentPlayer: games[gameId].playerIndexTurn }]
+      );
+    }
+  }
+  await sendToGamePlayers(gameId, messages);
 };
 
 const dispatchCommand =
@@ -155,11 +214,17 @@ const dispatchCommand =
         const firstPlayerIndex = room.roomUsers[0].index;
         if (firstPlayerIndex === secondPlayerIndex) return;
         const idGame = games.length;
+        const createPlayer = (index: number) => ({
+          index,
+          ships: [],
+          enemyGameField: new GameField(),
+        });
         games.push({
           players: [
-            { index: firstPlayerIndex, ships: [] },
-            { index: secondPlayerIndex, ships: [] },
+            createPlayer(firstPlayerIndex),
+            createPlayer(secondPlayerIndex),
           ],
+          playerIndexTurn: firstPlayerIndex,
         });
         const sendCreateGameCommand = (idPlayer: number) =>
           sendCommandWithLog(players[idPlayer].stream)(COMMAND.CREATE_GAME, {
@@ -171,23 +236,45 @@ const dispatchCommand =
         rooms = rooms.filter(({ roomId }) => roomId !== indexRoom);
         await sendToAll([onePlayerRoomsMessage()]);
         break;
-      case COMMAND.ADD_SHIPS:
+      case COMMAND.ADD_SHIPS: {
         const { gameId, ships, indexPlayer } = data as AddShipsRequest;
         const playerStateIdx = games[gameId].players.findIndex(
           ({ index }) => index === indexPlayer
         );
         games[gameId].players[playerStateIdx].ships = ships;
         if (games[gameId].players.every(({ ships }) => ships.length > 0)) {
-          for (const { index, ships } of games[gameId].players) {
-            await sendCommandWithLog(players[index].stream)(
+          const [playerOne, playerTwo] = games[gameId].players;
+          playerOne.enemyGameField.placeShips(playerTwo.ships);
+          playerTwo.enemyGameField.placeShips(playerOne.ships);
+          playerOne.enemyGameField.print();
+          playerTwo.enemyGameField.print();
+          await sendToGamePlayers(gameId, [
+            ({ index, ships }) => [
               COMMAND.START_GAME,
               {
                 ships,
                 currentPlayerIndex: index,
-              }
-            );
-          }
+              },
+            ],
+            [COMMAND.TURN, { currentPlayer: games[gameId].playerIndexTurn }],
+          ]);
         }
+        break;
+      }
+      case COMMAND.ATTACK: {
+        await attackCommand(data as AttackRequest);
+        break;
+      }
+      case COMMAND.RANDOM_ATTACK: {
+        const { gameId, indexPlayer } = data as RandomAttackRequest;
+        const playerState = games[gameId].players.find(
+          ({ index }) => index === indexPlayer
+        );
+        if (!playerState) return;
+        const randomPosition = playerState.enemyGameField.getRandomCellPos();
+        await attackCommand({ gameId, indexPlayer, ...randomPosition });
+        break;
+      }
     }
   };
 
