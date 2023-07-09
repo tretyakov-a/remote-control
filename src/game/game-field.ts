@@ -2,6 +2,7 @@ import { AttackStatus, Position, Ship } from "command";
 import { randomNumber } from "../utils.js";
 
 export const GAME_FIELD_SIZE = 10;
+export const SHOTED_TO_WIN = 20;
 
 export enum CELL_VALUE {
   EMPTY = 0,
@@ -14,7 +15,7 @@ export enum CELL_STATE {
 }
 
 export type CellCheckResult = {
-  status: AttackStatus | "opened";
+  status: AttackStatus | "opened" | "finished";
   missesAround?: Position[];
 };
 
@@ -37,9 +38,11 @@ type GameCell = {
 
 export class GameField {
   private cells: GameCell[][];
+  private shotedAmount: number;
 
   constructor() {
     this.cells = this.initGameField();
+    this.shotedAmount = 0;
   }
 
   private initGameField = () => {
@@ -98,6 +101,7 @@ export class GameField {
     result.status = "miss";
 
     if (value === CELL_VALUE.SHIP && ship !== undefined) {
+      this.shotedAmount += 1;
       const { direction, position, length } = ship;
       const shotedCells: Position[] = [];
       for (let i = 0; i < length; i += 1) {
@@ -109,7 +113,8 @@ export class GameField {
       }
 
       if (shotedCells.length === length) {
-        result.status = "killed";
+        result.status =
+          this.shotedAmount === SHOTED_TO_WIN ? "finished" : "killed";
         const missesAround: string[] = [];
         for (const { x, y } of shotedCells) {
           const missed = cellChecks

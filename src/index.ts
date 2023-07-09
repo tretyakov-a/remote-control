@@ -9,7 +9,6 @@ import {
   AddUserToRoomCommandRequest,
   Ship,
   AddShipsRequest,
-  TurnResponse,
   AttackRequest,
   RandomAttackRequest,
 } from "./command.js";
@@ -61,16 +60,7 @@ interface Game {
 
 const wsClients: Map<number, WebSocket> = new Map();
 const players: Player[] = [];
-const winners: Winner[] = [
-  {
-    name: "ValeraTheSlayer",
-    wins: 100,
-  },
-  {
-    name: "Vitek",
-    wins: 1,
-  },
-];
+const winners: Winner[] = [];
 let rooms: Room[] = [];
 const games: Game[] = [];
 
@@ -127,7 +117,10 @@ const attackCommand = async (data: AttackRequest) => {
     ],
     [COMMAND.TURN, { currentPlayer: games[gameId].playerIndexTurn }],
   ];
-  if (status === "killed" && missesAround !== undefined) {
+  if (
+    (status === "killed" || status === "finished") &&
+    missesAround !== undefined
+  ) {
     for (const missedPos of missesAround) {
       messages.push(
         [
@@ -141,6 +134,19 @@ const attackCommand = async (data: AttackRequest) => {
         [COMMAND.TURN, { currentPlayer: games[gameId].playerIndexTurn }]
       );
     }
+  }
+  if (status === "finished") {
+    const winnerName = players[indexPlayer].name;
+    const winnerIdx = winners.findIndex(({ name }) => name === winnerName);
+    if (winnerIdx === -1) {
+      winners.push({ name: winnerName, wins: 1 });
+    } else {
+      winners[winnerIdx].wins += 1;
+    }
+    messages.push(
+      [COMMAND.FINISH, { winPlayer: indexPlayer }],
+      [COMMAND.UPDATE_WINNERS, winners]
+    );
   }
   await sendToGamePlayers(gameId, messages);
 };
