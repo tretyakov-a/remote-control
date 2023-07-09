@@ -1,5 +1,5 @@
 import { Duplex, Readable } from "stream";
-import { COMMAND, NUL } from "./constants.js";
+import { COMMAND } from "./constants.js";
 
 export type RegCommandRequest = {
   name: string;
@@ -11,6 +11,15 @@ export type RegCommandResponse = {
   index: number;
   error: boolean;
   errorText: string;
+};
+
+export type AddUserToRoomCommandRequest = {
+  indexRoom: number;
+};
+
+export type CreateGameResponse = {
+  idGame: number;
+  idPlayer: number;
 };
 
 interface CommandWithStringData {
@@ -49,7 +58,7 @@ export const logOutputCommand = logCommand("->");
 
 const withLog =
   (fn: typeof sendCommand) =>
-  (duplexStream: Duplex) =>
+  (duplexStream: Duplex | null) =>
   async (...args: [string, unknown]) => {
     const [command, data] = args;
     logOutputCommand(`${command} ${JSON.stringify(data)}`);
@@ -57,10 +66,11 @@ const withLog =
   };
 
 export const sendCommand = async (
-  writeStream: Duplex,
+  writeStream: Duplex | null,
   command: string,
   data: unknown
 ): Promise<any> => {
+  if (writeStream === null) return;
   const dataToSend = {
     type: command,
     data: JSON.stringify(data),

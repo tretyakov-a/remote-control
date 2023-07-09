@@ -6,6 +6,7 @@ import {
   sendCommandWithLog,
   RegCommandRequest,
   RegCommandResponse,
+  AddUserToRoomCommandRequest,
 } from "./command.js";
 import { COMMAND } from "./constants.js";
 import { Duplex } from "stream";
@@ -41,6 +42,11 @@ interface Room {
   roomUsers: RoomUser[];
 }
 
+interface Game {
+  firstPlayerIndex: number;
+  secondPlayerIndex: number;
+}
+
 const wsClients: Map<number, WebSocket> = new Map();
 const players: Player[] = [];
 const winners: Winner[] = [
@@ -54,6 +60,7 @@ const winners: Winner[] = [
   },
 ];
 let rooms: Room[] = [];
+const games: Game[] = [];
 
 type Message = [COMMAND, unknown];
 
@@ -131,6 +138,30 @@ const dispatchCommand =
         });
         await sendToAll([onePlayerRoomsMessage()]);
         break;
+      case COMMAND.ADD_USER_TO_ROOM:
+        const { indexRoom } = data as AddUserToRoomCommandRequest;
+        const secondPlayerIndex = players.findIndex(
+          (p) => p.wsIndex === wsIndex
+        );
+        if (secondPlayerIndex === -1) return;
+        const room = rooms.find(({ roomId }) => roomId === indexRoom);
+        if (!room) return;
+        const firstPlayerIndex = room.roomUsers[0].index;
+        if (firstPlayerIndex === secondPlayerIndex) return;
+        const idGame = games.length;
+        games.push({
+          firstPlayerIndex,
+          secondPlayerIndex,
+        });
+        const sendCreateGameCommand = (idPlayer: number) =>
+          sendCommandWithLog(players[idPlayer].stream)(COMMAND.CREATE_GAME, {
+            idGame,
+            idPlayer,
+          });
+        await sendCreateGameCommand(firstPlayerIndex);
+        await sendCreateGameCommand(secondPlayerIndex);
+        rooms = rooms.filter(({ roomId }) => roomId !== indexRoom);
+        await sendToAll([onePlayerRoomsMessage()]);
     }
   };
 
