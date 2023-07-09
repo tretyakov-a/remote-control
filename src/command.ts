@@ -22,6 +22,26 @@ export type CreateGameResponse = {
   idPlayer: number;
 };
 
+export type ShipType = "small" | "medium" | "large" | "huge";
+
+export type Ship = {
+  position: { x: number; y: number };
+  direction: boolean;
+  length: number;
+  type: ShipType;
+};
+
+export type AddShipsRequest = {
+  gameId: number;
+  ships: Ship[];
+  indexPlayer: number;
+};
+
+export type StartGameResponse = {
+  ships: Ship[];
+  currentPlayerIndex: number;
+};
+
 interface CommandWithStringData {
   type: COMMAND;
   data: string;

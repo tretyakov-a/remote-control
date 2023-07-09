@@ -7,6 +7,8 @@ import {
   RegCommandRequest,
   RegCommandResponse,
   AddUserToRoomCommandRequest,
+  Ship,
+  AddShipsRequest,
 } from "./command.js";
 import { COMMAND } from "./constants.js";
 import { Duplex } from "stream";
@@ -42,9 +44,13 @@ interface Room {
   roomUsers: RoomUser[];
 }
 
+interface PlayerGameState {
+  index: number;
+  ships: Ship[];
+}
+
 interface Game {
-  firstPlayerIndex: number;
-  secondPlayerIndex: number;
+  players: PlayerGameState[];
 }
 
 const wsClients: Map<number, WebSocket> = new Map();
@@ -150,8 +156,10 @@ const dispatchCommand =
         if (firstPlayerIndex === secondPlayerIndex) return;
         const idGame = games.length;
         games.push({
-          firstPlayerIndex,
-          secondPlayerIndex,
+          players: [
+            { index: firstPlayerIndex, ships: [] },
+            { index: secondPlayerIndex, ships: [] },
+          ],
         });
         const sendCreateGameCommand = (idPlayer: number) =>
           sendCommandWithLog(players[idPlayer].stream)(COMMAND.CREATE_GAME, {
@@ -162,6 +170,24 @@ const dispatchCommand =
         await sendCreateGameCommand(secondPlayerIndex);
         rooms = rooms.filter(({ roomId }) => roomId !== indexRoom);
         await sendToAll([onePlayerRoomsMessage()]);
+        break;
+      case COMMAND.ADD_SHIPS:
+        const { gameId, ships, indexPlayer } = data as AddShipsRequest;
+        const playerStateIdx = games[gameId].players.findIndex(
+          ({ index }) => index === indexPlayer
+        );
+        games[gameId].players[playerStateIdx].ships = ships;
+        if (games[gameId].players.every(({ ships }) => ships.length > 0)) {
+          for (const { index, ships } of games[gameId].players) {
+            await sendCommandWithLog(players[index].stream)(
+              COMMAND.START_GAME,
+              {
+                ships,
+                currentPlayerIndex: index,
+              }
+            );
+          }
+        }
     }
   };
 
