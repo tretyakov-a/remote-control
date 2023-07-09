@@ -5,9 +5,10 @@ import {
   logInputCommand,
   sendCommandWithLog,
   RegCommandRequest,
+  RegCommandResponse,
 } from "./command.js";
 import { COMMAND } from "./constants.js";
-import internal from "stream";
+import { Duplex } from "stream";
 
 const HTTP_PORT = 8181;
 const WSS_PORT = 3000;
@@ -21,6 +22,8 @@ console.log(`Start web socket server on the localhost:${WSS_PORT}!`);
 interface Player {
   name: string;
   password: string;
+  stream: Duplex | null;
+  wsIndex: number | null;
 }
 
 interface Winner {
@@ -50,65 +53,90 @@ const winners: Winner[] = [
     wins: 1,
   },
 ];
-const rooms: Room[] = [
-  {
-    roomId: 0,
-    roomUsers: [
-      {
-        name: "ValeraTheSlayer",
-        index: 0,
-      },
-    ],
-  },
-  {
-    roomId: 1,
-    roomUsers: [
-      {
-        name: "Vitek",
-        index: 1,
-      },
-      {
-        name: "Slavik",
-        index: 2,
-      },
-    ],
-  },
-];
+let rooms: Room[] = [];
+
+type Message = [COMMAND, unknown];
+
+const onePlayerRoomsMessage = (): Message => {
+  return [
+    COMMAND.UPDATE_ROOM,
+    rooms.filter(({ roomUsers }) => roomUsers.length === 1),
+  ];
+};
+
+const sendToAll = async (messages: Message[]) => {
+  for (const { stream } of players) {
+    if (stream === null) continue;
+    for (const [cmd, data] of messages) {
+      await sendCommandWithLog(stream)(cmd, data);
+    }
+  }
+};
 
 const dispatchCommand =
-  (duplexStream: internal.Duplex) => async (commandData: string) => {
+  (duplexStream: Duplex, wsIndex: number) => async (commandData: string) => {
     logInputCommand(commandData);
-    const sendCommand = sendCommandWithLog(duplexStream);
     const { type, data } = parseCommand(commandData);
+    let playerIdx: number;
 
     switch (type) {
       case COMMAND.REG:
         const { name, password } = data as RegCommandRequest;
-        let playerIdx = players.findIndex(
-          (p) => p.name === name && p.password === password
-        );
-        if (playerIdx === -1) {
-          playerIdx = players.length;
-          players.push({ name, password });
-        }
-        await sendCommand(type, {
+        const msgData: RegCommandResponse = {
           name,
-          index: playerIdx,
+          index: players.findIndex((p) => p.name === name),
           error: false,
           errorText: "",
+        };
+        playerIdx = msgData.index;
+        if (playerIdx === -1) {
+          msgData.index = players.length;
+          players.push({ name, password, stream: duplexStream, wsIndex });
+        } else {
+          if (players[playerIdx].password !== password) {
+            return await sendCommandWithLog(duplexStream)(type, {
+              ...msgData,
+              error: true,
+              errorText: `Wrong password`,
+            });
+          }
+          if (players[playerIdx].stream !== null) {
+            return await sendCommandWithLog(duplexStream)(type, {
+              ...msgData,
+              error: true,
+              errorText: `Player ${name} already logged in`,
+            });
+          }
+          players[playerIdx].stream = duplexStream;
+          players[playerIdx].wsIndex = wsIndex;
+        }
+        await sendCommandWithLog(duplexStream)(type, msgData);
+        await sendToAll([
+          [COMMAND.UPDATE_WINNERS, winners],
+          onePlayerRoomsMessage(),
+        ]);
+        break;
+      case COMMAND.CREATE_ROOM:
+        playerIdx = players.findIndex((p) => p.wsIndex === wsIndex);
+        if (playerIdx === -1) return;
+        const roomId = rooms.length;
+        rooms.push({
+          roomId,
+          roomUsers: [
+            {
+              index: playerIdx,
+              name: players[playerIdx].name,
+            },
+          ],
         });
-        await sendCommand(COMMAND.UPDATE_WINNERS, winners);
-        await sendCommand(
-          COMMAND.UPDATE_ROOM,
-          rooms.filter(({ roomUsers }) => roomUsers.length === 1)
-        );
+        await sendToAll([onePlayerRoomsMessage()]);
         break;
     }
   };
 
 wss.on("connection", (ws: WebSocket) => {
-  const wsIdx = wsClients.size + 1;
-  wsClients.set(wsIdx, ws);
+  const wsIndex = wsClients.size + 1;
+  wsClients.set(wsIndex, ws);
 
   const duplexStream = createWebSocketStream(ws, {
     encoding: "utf8",
@@ -118,9 +146,15 @@ wss.on("connection", (ws: WebSocket) => {
 
   const handleDestroy = () => {
     ws.close();
-    wsClients.delete(wsIdx);
-    console.log(`Web socket ${wsIdx} has been destroyed`);
-    console.log(wsClients);
+    wsClients.delete(wsIndex);
+    const playerIdx = players.findIndex((p) => p.wsIndex === wsIndex);
+    if (playerIdx !== -1) {
+      players[playerIdx].wsIndex = null;
+      players[playerIdx].stream = null;
+      rooms = rooms.filter((room) => room.roomUsers[0].index !== playerIdx);
+      sendToAll([onePlayerRoomsMessage()]);
+    }
+    console.log(`Web socket ${wsIndex} has been destroyed`);
   };
 
   duplexStream.on("error", (err) => {
@@ -128,7 +162,7 @@ wss.on("connection", (ws: WebSocket) => {
     handleDestroy();
   });
 
-  duplexStream.on("data", dispatchCommand(duplexStream));
+  duplexStream.on("data", dispatchCommand(duplexStream, wsIndex));
 
   ws.on("close", () => {
     console.log("Web socket was closed by client");
