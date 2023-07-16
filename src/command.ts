@@ -55,6 +55,7 @@ export type Position = {
   x: number;
   y: number;
 };
+
 export interface AttackResponse {
   position: Position;
   currentPlayer: number;
@@ -101,8 +102,8 @@ export const parseCommand = (str: string) => {
 
 const logCommand =
   (prefix: string) =>
-  (command: string): void =>
-    console.log(`${prefix} ${command}`);
+  (command: string, data: unknown): void =>
+    console.log(`${prefix} ${command} ${JSON.stringify(data)}`);
 
 export const logInputCommand = logCommand("<-");
 
@@ -113,7 +114,7 @@ const withLog =
   (duplexStream: Duplex | null) =>
   async (...args: [string, unknown]) => {
     const [command, data] = args;
-    logOutputCommand(`${command} ${JSON.stringify(data)}`);
+    logOutputCommand(command, JSON.stringify(data));
     return await fn.call(null, duplexStream, ...args);
   };
 

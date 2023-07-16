@@ -1,4 +1,4 @@
-import { AttackStatus, Position, Ship } from "command";
+import { AttackStatus, Position, Ship, ShipType } from "command";
 import { randomNumber } from "../utils.js";
 
 export const GAME_FIELD_SIZE = 10;
@@ -29,6 +29,15 @@ const cellChecks = [
   [0, 1],
   [1, 1],
 ];
+
+const shipsInfo: [ShipType, number, number][] = [
+  ["small", 4, 1],
+  ["medium", 3, 2],
+  ["large", 2, 3],
+  ["huge", 1, 4],
+];
+
+const directions = [true, false];
 
 type GameCell = {
   state: CELL_STATE;
@@ -81,15 +90,62 @@ export class GameField {
     }
   };
 
-  private checkCell = (pos: Position) => {
+  private isInBounds = (x: number, y: number) => {
+    return x >= 0 && x < GAME_FIELD_SIZE && y >= 0 && y < GAME_FIELD_SIZE;
+  };
+
+  private isCellClosed = (pos: Position) => {
     const { x, y } = pos;
     return (
-      x >= 0 &&
-      x < GAME_FIELD_SIZE &&
-      y >= 0 &&
-      y < GAME_FIELD_SIZE &&
-      this.cells[y][x].state === CELL_STATE.CLOSED
+      this.isInBounds(x, y) && this.cells[y][x].state === CELL_STATE.CLOSED
     );
+  };
+
+  private isShip = (pos: Position) => {
+    const { x, y } = pos;
+    return this.isInBounds(x, y) && this.cells[y][x].value === CELL_VALUE.SHIP;
+  };
+
+  public isShipPlacementPossible = (ship: Ship) => {
+    const shipCells = this.getShipCells(ship);
+    const cellsAround = this.getCellsAround(ship);
+    return (
+      shipCells.length === ship.length &&
+      shipCells.concat(cellsAround).every((pos) => !this.isShip(pos))
+    );
+  };
+
+  private getShipCells = ({ position, direction, length }: Ship) => {
+    const shipCells: Position[] = [];
+    for (let i = 0; i < length; i += 1) {
+      const cellY = position.y + (direction ? i : 0);
+      const cellX = position.x + (direction ? 0 : i);
+      if (this.isInBounds(cellX, cellY)) shipCells.push({ x: cellX, y: cellY });
+    }
+    return shipCells;
+  };
+
+  private getCellsAround = (ship: Ship, setOpen = false): Position[] => {
+    const shipCells = this.getShipCells(ship);
+    const cellsAround: string[] = [];
+    for (const { x, y } of shipCells) {
+      const missed = cellChecks
+        .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+        .filter((pos) => this.isCellClosed(pos))
+        .map((pos) => `${pos.x}:${pos.y}`);
+      cellsAround.push(...missed);
+    }
+
+    const uniqueCells = [...new Set(cellsAround)]
+      .map((pos) => {
+        const [x, y] = pos.split(":").map(Number);
+        if (setOpen) this.cells[y][x].state = CELL_STATE.OPENED;
+        return { x, y };
+      })
+      .filter(
+        ({ x, y }) => !shipCells.some((pos) => pos.x === x && pos.y === y)
+      );
+    return uniqueCells;
   };
 
   public check = (pos: Position): CellCheckResult => {
@@ -102,32 +158,14 @@ export class GameField {
 
     if (value === CELL_VALUE.SHIP && ship !== undefined) {
       this.shotedAmount += 1;
-      const { direction, position, length } = ship;
-      const shotedCells: Position[] = [];
-      for (let i = 0; i < length; i += 1) {
-        const cellY = position.y + (direction ? i : 0);
-        const cellX = position.x + (direction ? 0 : i);
-        if (this.cells[cellY][cellX].state === CELL_STATE.OPENED) {
-          shotedCells.push({ x: cellX, y: cellY });
-        }
-      }
+      const shotedCells = this.getShipCells(ship).filter(
+        ({ x, y }) => this.cells[y][x].state === CELL_STATE.OPENED
+      );
 
-      if (shotedCells.length === length) {
+      if (shotedCells.length === ship.length) {
         result.status =
           this.shotedAmount === SHOTED_TO_WIN ? "finished" : "killed";
-        const missesAround: string[] = [];
-        for (const { x, y } of shotedCells) {
-          const missed = cellChecks
-            .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
-            .filter((pos) => this.checkCell(pos))
-            .map((pos) => `${pos.x}:${pos.y}`);
-          missesAround.push(...missed);
-        }
-        result.missesAround = [...new Set(missesAround)].map((pos) => {
-          const [x, y] = pos.split(":").map(Number);
-          this.cells[y][x].state = CELL_STATE.OPENED;
-          return { x, y };
-        });
+        result.missesAround = this.getCellsAround(ship, true);
       } else {
         result.status = "shot";
       }
@@ -143,5 +181,37 @@ export class GameField {
       pos = { x, y };
     } while (this.cells[pos.y][pos.x].state !== CELL_STATE.CLOSED);
     return pos;
+  };
+
+  public generateShips = () => {
+    const ships: Ship[] = [];
+
+    for (const [type, amount, length] of shipsInfo) {
+      for (let i = 0; i < amount; i += 1) {
+        const availibleShipPositions: Ship[] = [];
+        for (let y = 0; y < GAME_FIELD_SIZE; y += 1) {
+          for (let x = 0; x < GAME_FIELD_SIZE; x += 1) {
+            for (const direction of directions) {
+              const ship: Ship = {
+                position: { x, y },
+                direction,
+                length,
+                type,
+              };
+              if (this.isShipPlacementPossible(ship)) {
+                availibleShipPositions.push(ship);
+              }
+            }
+          }
+        }
+        const randomShip =
+          availibleShipPositions[
+            randomNumber(0, availibleShipPositions.length - 1)
+          ];
+        this.placeShips([randomShip]);
+        ships.push(randomShip);
+      }
+    }
+    return ships;
   };
 }

@@ -12,4 +12,6 @@ export enum COMMAND {
   ATTACK = "attack",
   RANDOM_ATTACK = "randomAttack",
   FINISH = "finish",
+
+  SINGLE_PLAY = "single_play",
 }
