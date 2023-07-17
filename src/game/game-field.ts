@@ -1,4 +1,4 @@
-import { AttackStatus, Position, Ship, ShipType } from "command";
+import { AttackStatus, Position, Ship, ShipType } from "../commands/types";
 import { randomNumber } from "../utils.js";
 
 export const GAME_FIELD_SIZE = 10;

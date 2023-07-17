@@ -1,88 +1,22 @@
 import { Duplex, Readable } from "stream";
-import { COMMAND } from "./constants.js";
+import { Command, CommandWithStringData } from "./types";
 
-export interface RegCommandRequest {
-  name: string;
-  password: string;
-}
+export enum COMMAND {
+  REG = "reg",
+  UPDATE_WINNERS = "update_winners",
+  UPDATE_ROOM = "update_room",
+  CREATE_ROOM = "create_room",
+  ADD_USER_TO_ROOM = "add_user_to_room",
+  CREATE_GAME = "create_game",
+  ADD_SHIPS = "add_ships",
+  START_GAME = "start_game",
 
-export interface RegCommandResponse {
-  name: string;
-  index: number;
-  error: boolean;
-  errorText: string;
-}
+  TURN = "turn",
+  ATTACK = "attack",
+  RANDOM_ATTACK = "randomAttack",
+  FINISH = "finish",
 
-export interface AddUserToRoomCommandRequest {
-  indexRoom: number;
-}
-
-export interface CreateGameResponse {
-  idGame: number;
-  idPlayer: number;
-}
-
-export type ShipType = "small" | "medium" | "large" | "huge";
-
-export type Ship = {
-  position: Position;
-  direction: boolean;
-  length: number;
-  type: ShipType;
-};
-
-export interface AddShipsRequest {
-  gameId: number;
-  ships: Ship[];
-  indexPlayer: number;
-}
-
-export interface StartGameResponse {
-  ships: Ship[];
-  currentPlayerIndex: number;
-}
-
-export interface AttackRequest {
-  gameId: number;
-  x: number;
-  y: number;
-  indexPlayer: number;
-}
-
-export type AttackStatus = "miss" | "killed" | "shot";
-
-export type Position = {
-  x: number;
-  y: number;
-};
-
-export interface AttackResponse {
-  position: Position;
-  currentPlayer: number;
-  status: AttackStatus;
-}
-
-export interface RandomAttackRequest {
-  gameId: number;
-  indexPlayer: number;
-}
-
-export interface TurnResponse {
-  currentPlayer: number;
-}
-
-export interface FinishResponse {
-  winPlayer: number;
-}
-
-interface CommandWithStringData {
-  type: COMMAND;
-  data: string;
-}
-
-interface Command {
-  type: COMMAND;
-  data: unknown;
+  SINGLE_PLAY = "single_play",
 }
 
 const parseCommandJSON = (jsonString: string): Command => {
@@ -122,7 +56,7 @@ export const sendCommand = async (
   writeStream: Duplex | null,
   command: string,
   data: unknown
-): Promise<any> => {
+): Promise<void> => {
   if (writeStream === null) return;
   const dataToSend = {
     type: command,
@@ -136,8 +70,6 @@ export const sendCommand = async (
       readStream.on("error", reject);
       readStream.pipe(writeStream, { end: false }).on("error", reject);
     });
-  } catch (error) {
-    throw error;
   } finally {
     if (readStream) readStream.destroy();
   }
