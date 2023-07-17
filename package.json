@@ -26,5 +26,8 @@
   },
   "dependencies": {
     "ws": "^8.8.0"
+  },
+  "engines": {
+    "node": ">=18.12.0"
   }
 }
