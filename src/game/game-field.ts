@@ -186,28 +186,31 @@ export class GameField {
   public generateShips = () => {
     const ships: Ship[] = [];
 
-    for (const [type, amount, length] of shipsInfo) {
-      for (let i = 0; i < amount; i += 1) {
-        const availibleShipPositions: Ship[] = [];
+    const getShipOfType = (type: ShipType, length: number) => {
+      const availibleShipPositions: Ship[] = [];
+      for (const direction of directions) {
         for (let y = 0; y < GAME_FIELD_SIZE; y += 1) {
           for (let x = 0; x < GAME_FIELD_SIZE; x += 1) {
-            for (const direction of directions) {
-              const ship: Ship = {
-                position: { x, y },
-                direction,
-                length,
-                type,
-              };
-              if (this.isShipPlacementPossible(ship)) {
-                availibleShipPositions.push(ship);
-              }
+            const ship: Ship = {
+              position: { x, y },
+              direction,
+              length,
+              type,
+            };
+            if (this.isShipPlacementPossible(ship)) {
+              availibleShipPositions.push(ship);
             }
           }
         }
-        const randomShip =
-          availibleShipPositions[
-            randomNumber(0, availibleShipPositions.length - 1)
-          ];
+      }
+      return availibleShipPositions[
+        randomNumber(0, availibleShipPositions.length - 1)
+      ];
+    };
+
+    for (const [type, amount, length] of shipsInfo) {
+      for (let i = 0; i < amount; i += 1) {
+        const randomShip = getShipOfType(type, length);
         this.placeShips([randomShip]);
         ships.push(randomShip);
       }
